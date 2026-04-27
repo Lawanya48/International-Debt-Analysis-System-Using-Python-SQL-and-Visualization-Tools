@@ -1,113 +1,91 @@
 import streamlit as st
+import pandas as pd
 import plotly.express as px
 
-def show_insights(df):
+def show_queries(df):
 
-    st.title("📊 Insights Dashboard")
+    st.title("📊 Queries Dashboard (Visual Analytics)")
 
-    # ---------------- COLUMN SAFETY ----------------
-    country_col = "country_name" if "country_name" in df.columns else "country"
-    indicator_col = "indicator_name" if "indicator_name" in df.columns else "indicator"
+    df = df.copy()
 
-    # ---------------- SORT ----------------
-    df = df.sort_values([country_col, indicator_col, "year"])
+    # ---------------- FILTER ----------------
+    st.sidebar.header("🔍 Query Filters")
 
-    # ---------------- HANDLE MISSING VALUES ----------------
-    df["value"] = df.groupby([country_col, indicator_col])["value"].ffill()
-    df["value"] = df.groupby([country_col, indicator_col])["value"].bfill()
-
-    # ---------------- SIDEBAR FILTERS ----------------
-    st.sidebar.subheader("🔍 Insights Filters")
-
-    # Indicator filter
-    indicators = sorted(df[indicator_col].dropna().unique())
-    category = st.sidebar.selectbox("Indicator", ["All"] + indicators)
-
-    if category != "All":
-        df = df[df[indicator_col] == category]
-
-    # Year filter (2006–2024)
-    year_range = st.sidebar.slider(
-        "Year Range",
-        int(df["year"].min()),
-        int(df["year"].max()),
-        (2010, 2024)
-    )
-
-    df = df[(df["year"] >= year_range[0]) & (df["year"] <= year_range[1])]
-
-    # Country filter
     country = st.sidebar.selectbox(
         "Country",
-        sorted(df[country_col].dropna().unique())
+        ["All"] + sorted(df["country"].dropna().unique())
     )
 
-    data = df[df[country_col] == country]
+    if country != "All":
+        df = df[df["country"] == country]
 
-    if data.empty:
-        st.warning("⚠ No data available for this selection")
-        return
+    total_value = df["value"].sum()
 
-    st.subheader(f"{country} Analysis")
+    # ================= BASIC =================
+    st.header("🔹 Basic Analysis")
 
-    # ---------------- KPI ----------------
-    total_value = data["value"].sum()
-    st.metric("Total Debt Value", f"{total_value:,.2f}")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🌎 Countries", df["country"].nunique())
+    col2.metric("📊 Indicators", df["indicator"].nunique())
+    col3.metric("📁 Records", len(df))
 
-    # ---------------- GLOBAL TREND ----------------
-    st.subheader("🌍 Global Year-wise Trend")
-    global_trend = df.groupby("year")["value"].sum().reset_index()
-    st.plotly_chart(px.line(global_trend, x="year", y="value"))
+    col4, col5, col6 = st.columns(3)
+    col4.metric("⬇ Min", f"{df['value'].min():,.0f}")
+    col5.metric("⬆ Max", f"{df['value'].max():,.0f}")
+    col6.metric("📈 Avg", f"{df['value'].mean():,.0f}")
 
-    # ---------------- COUNTRY TREND ----------------
-    st.subheader("📈 Country Year-wise Trend")
-    trend = data.groupby("year")["value"].sum().reset_index()
-    st.plotly_chart(px.line(trend, x="year", y="value"))
+    # Records per country
+    rec = df["country"].value_counts().reset_index()
+    rec.columns = ["country", "count"]
+    st.plotly_chart(px.bar(rec, x="country", y="count", title="Records per Country"), use_container_width=True)
 
-    # ---------------- AREA CHART ----------------
-    st.subheader("📊 Area Chart (Trend + Volume)")
-    st.plotly_chart(px.area(trend, x="year", y="value"))
+    # ================= INTERMEDIATE =================
+    st.header("🔸 Intermediate Analysis")
 
-    # ---------------- BAR CHART ----------------
-    st.subheader("📊 Indicator Distribution")
-    ind = data.groupby(indicator_col)["value"].sum().reset_index()
-    st.plotly_chart(px.bar(ind, x=indicator_col, y="value"))
+    q_country = df.groupby("country")["value"].sum().reset_index()
 
-    # ---------------- PIE CHART ----------------
-    st.subheader("🥧 Indicator Share")
-    st.plotly_chart(px.pie(ind, names=indicator_col, values="value"))
+    st.plotly_chart(px.bar(q_country, x="country", y="value", title="Total Value per Country"), use_container_width=True)
 
-    # ---------------- HISTOGRAM ----------------
-    st.subheader("📉 Value Distribution")
-    st.plotly_chart(px.histogram(data, x="value"))
+    st.plotly_chart(px.bar(
+        q_country.sort_values("value", ascending=False).head(10),
+        x="country", y="value", title="Top 10 Countries"
+    ), use_container_width=True)
 
-    # ---------------- BOX PLOT ----------------
-    st.subheader("📦 Value Spread")
-    st.plotly_chart(px.box(data, y="value"))
+    avg_country = df.groupby("country")["value"].mean().reset_index()
+    st.plotly_chart(px.bar(avg_country, x="country", y="value", title="Average Value per Country"), use_container_width=True)
 
-    # ---------------- SCATTER ----------------
-    st.subheader("🔵 Year vs Value (Scatter)")
-    data = data.copy()
-    data["size_value"] = data["value"].abs()
+    q_ind = df.groupby("indicator")["value"].sum().reset_index()
+    st.plotly_chart(px.pie(q_ind, names="indicator", values="value", title="Indicator Contribution"), use_container_width=True)
 
-    st.plotly_chart(
-        px.scatter(
-            data,
-            x="year",
-            y="value",
-            size="size_value",
-            color=indicator_col
-        )
-    )
+    # ================= ADVANCED =================
+    st.header("🔺 Advanced Analysis")
 
-    # ---------------- HEATMAP ----------------
-    st.subheader("🔥 Heatmap")
+    # % contribution
+    contrib = q_country.copy()
+    contrib["%"] = contrib["value"] / total_value * 100
+    st.plotly_chart(px.pie(contrib, names="country", values="%", title="% Contribution by Country"), use_container_width=True)
 
-    pivot = data.pivot_table(
-        values="value",
-        index="year",
-        columns=indicator_col,
-        aggfunc="sum"
-    ).fillna(0)
+    # Top 5 indicators
+    st.plotly_chart(px.bar(
+        q_ind.sort_values("value", ascending=False).head(5),
+        x="indicator", y="value", title="Top 5 Indicators"
+    ), use_container_width=True)
 
-    st.plotly_chart(px.imshow(pivot, aspect="auto"))
+    # Heatmap
+    pivot = df.pivot_table(values="value", index="country", columns="indicator", aggfunc="sum")
+    st.plotly_chart(px.imshow(pivot, aspect="auto", title="Country vs Indicator Heatmap"), use_container_width=True)
+
+    # Cumulative trend
+    df_sorted = df.sort_values(["country", "year"])
+    df_sorted["cum"] = df_sorted.groupby("country")["value"].cumsum()
+    st.plotly_chart(px.line(df_sorted, x="year", y="cum", color="country", title="Cumulative Trend"), use_container_width=True)
+
+    # Dominant indicator
+    q30 = df.groupby(["country","indicator"])["value"].sum().reset_index()
+    idx = q30.groupby("country")["value"].idxmax()
+    dominant = q30.loc[idx]
+
+    st.plotly_chart(px.bar(
+        dominant, x="country", y="value", color="indicator",
+        title="Dominant Indicator per Country"
+    ), use_container_width=True)
