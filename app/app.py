@@ -12,8 +12,8 @@ file_path = os.path.join(base_path, "final_dataset.csv")
 
 #sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.insights import show_insights
-from src.queries import show_queries
+import insights
+import queries
 
 st.set_page_config(layout="wide")
 
