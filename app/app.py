@@ -1,26 +1,19 @@
 import streamlit as st
 import pandas as pd
-import sys
-
 import os
-import pandas as pd
-
-base_path = os.path.dirname(__file__)
-file_path = os.path.join(base_path, "final_dataset.csv")
-
-#df = pd.read_csv(file_path)
-
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import insights
 import queries
 
 st.set_page_config(layout="wide")
 
-df = pd.read_csv("data/final_cleaned_debt_data.csv")
+base_path = os.path.dirname(__file__)
+file_path = os.path.join(base_path, "final_dataset.csv")
+
+df = pd.read_csv(file_path)
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Insights", "Queries"])
 
+# Dashboard
 if page == "Dashboard":
 
     st.title("🌍 Global Dashboard")
@@ -33,8 +26,10 @@ if page == "Dashboard":
     st.line_chart(data.groupby("year")["value"].sum())
     st.bar_chart(data.groupby("indicator")["value"].sum())
 
+# Insights
 elif page == "Insights":
-    show_insights(df)
+    insights.show_insights()
 
+# Queries
 elif page == "Queries":
-    show_queries(df)
+    queries.show_queries()
