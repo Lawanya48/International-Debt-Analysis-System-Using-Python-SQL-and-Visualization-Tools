@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os
 
 def show_insights(df):
 
@@ -8,15 +9,23 @@ def show_insights(df):
 
     df = df.copy()
 
-    # ---------------- LOAD METADATA ----------------
-    try:
-        meta = pd.read_csv("data/IDS_CountryMetaData.csv")
-    except:
-        st.error("Metadata file not found")
-        return
+    # ---------------- LOAD METADATA (FIXED PATH) ----------------
+    base_path = os.path.dirname(__file__)
+    meta_path = os.path.join(base_path, "..", "data", "IDS_CountryMetaData.csv")
 
-    # Merge metadata with main data
+    if not os.path.exists(meta_path):
+        st.error("❌ Metadata file not found. Please check data folder.")
+        st.stop()
+
+    meta = pd.read_csv(meta_path)
+
+    # ---------------- MERGE DATA ----------------
     df = df.merge(meta, left_on="country", right_on="Country Name", how="left")
+
+    # ---------------- DATA CLEANING ----------------
+    df["value"] = df.groupby(["country", "indicator"])["value"].ffill()
+    df["value"] = df.groupby(["country", "indicator"])["value"].bfill()
+    df = df.dropna(subset=["value"])
 
     # ---------------- FILTERS ----------------
     st.sidebar.header("🔍 Insights Filters")
@@ -29,7 +38,7 @@ def show_insights(df):
     data = df[df["country"] == country]
 
     if data.empty:
-        st.warning("No data available")
+        st.warning("No data available for selected country")
         return
 
     st.subheader(f"{country} Analysis")
@@ -48,12 +57,18 @@ def show_insights(df):
         "Latest population census"
     ]
 
-    # Count availability (non-null)
-    meta_data = data[meta_cols].notna().sum().reset_index()
-    meta_data.columns = ["Category", "Available Count"]
+    # Convert metadata values into numeric (year)
+    meta_values = data[meta_cols].iloc[0].replace("..", None)
+
+    meta_df = pd.DataFrame({
+        "Category": meta_cols,
+        "Year": meta_values.values
+    })
+
+    meta_df = meta_df.dropna()
 
     st.plotly_chart(
-        px.bar(meta_data, x="Category", y="Available Count", title="Metadata Availability"),
+        px.bar(meta_df, x="Category", y="Year", title="Latest Available Data (Year-wise)"),
         use_container_width=True
     )
 
@@ -67,7 +82,7 @@ def show_insights(df):
     ind = data.groupby("indicator")["value"].sum().reset_index()
     st.plotly_chart(px.bar(ind, x="indicator", y="value"), use_container_width=True)
 
-    # ---------------- PIE ----------------
+    # ---------------- PIE CHART ----------------
     st.subheader("🥧 Indicator Share")
     st.plotly_chart(px.pie(ind, names="indicator", values="value"), use_container_width=True)
 
@@ -75,12 +90,12 @@ def show_insights(df):
     st.subheader("📉 Value Distribution")
     st.plotly_chart(px.histogram(data, x="value"), use_container_width=True)
 
-    # ---------------- BOX ----------------
+    # ---------------- BOX PLOT ----------------
     st.subheader("📦 Value Spread")
     st.plotly_chart(px.box(data, y="value"), use_container_width=True)
 
     # ---------------- SCATTER ----------------
-    st.subheader("🔵 Scatter Plot")
+    st.subheader("🔵 Scatter Plot (Year vs Value)")
     data["size_value"] = data["value"].abs()
     st.plotly_chart(
         px.scatter(data, x="year", y="value", size="size_value"),
@@ -88,6 +103,6 @@ def show_insights(df):
     )
 
     # ---------------- HEATMAP ----------------
-    st.subheader("🔥 Heatmap")
+    st.subheader("🔥 Heatmap (Year vs Indicator)")
     pivot = data.pivot_table(values="value", index="year", columns="indicator", aggfunc="sum")
     st.plotly_chart(px.imshow(pivot, aspect="auto"), use_container_width=True)
