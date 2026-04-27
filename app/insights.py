@@ -14,39 +14,29 @@ def show_insights(df):
     meta_path = os.path.join(base_path, "..", "data", "IDS_CountryMetaData.csv")
 
     if not os.path.exists(meta_path):
-        st.error("❌ Metadata file not found. Please check data folder.")
+        st.error("Metadata file not found")
         st.stop()
 
-    # Fix encoding issue
     try:
         meta = pd.read_csv(meta_path, encoding="utf-8")
     except:
         meta = pd.read_csv(meta_path, encoding="latin1")
 
-    # ---------------- FIND CORRECT COUNTRY COLUMN ----------------
-    possible_cols = ["Country Name", "country", "Country", "Long Name"]
-
-    meta_col = None
-    for col in possible_cols:
+    # Detect country column
+    for col in ["Country Name", "country", "Country", "Long Name"]:
         if col in meta.columns:
             meta_col = col
             break
 
-    if meta_col is None:
-        st.error("❌ No matching country column found in metadata")
-        st.write("Available columns:", list(meta.columns))
-        st.stop()
-
-    # ---------------- MERGE ----------------
     df = df.merge(meta, left_on="country", right_on=meta_col, how="left")
 
-    # ---------------- DATA CLEANING ----------------
-    df["value"] = df.groupby(["country", "indicator"])["value"].ffill()
-    df["value"] = df.groupby(["country", "indicator"])["value"].bfill()
-    df = df.dropna(subset=["value"])
-
-    # ---------------- FILTER ----------------
+    # ---------------- FILTERS ----------------
     st.sidebar.header("🔍 Insights Filters")
+
+    category = st.sidebar.selectbox(
+        "Category",
+        ["All", "Agriculture", "Industry", "Trade", "Population", "Water"]
+    )
 
     country = st.sidebar.selectbox(
         "Country",
@@ -56,84 +46,89 @@ def show_insights(df):
     data = df[df["country"] == country]
 
     if data.empty:
-        st.warning("No data available for selected country")
+        st.warning("No data available")
         return
 
-    st.subheader(f"{country} Analysis")
+    st.subheader(f"{country} - {category} Analysis")
 
     # ---------------- KPI ----------------
     st.metric("💰 Total Value", f"{data['value'].sum():,.2f}")
 
-    # ---------------- METADATA VISUALIZATION ----------------
+    # ---------------- CATEGORY → METADATA ----------------
+    category_map = {
+        "Agriculture": "Latest agricultural census",
+        "Industry": "Latest industrial data",
+        "Trade": "Latest trade data",
+        "Population": "Latest population census",
+        "Water": "Latest water withdrawal data"
+    }
+
+    if category != "All":
+
+        col_name = category_map.get(category)
+
+        if col_name in data.columns:
+
+            val = data[col_name].iloc[0]
+
+            # Clean value
+            if val in ["..", "", None]:
+                st.warning(f"No metadata available for {category}")
+            else:
+                try:
+                    year_val = int(val)
+                    st.success(f"📅 {category} Latest Data Year: {year_val}")
+                except:
+                    st.warning(f"Invalid metadata value for {category}")
+        else:
+            st.warning(f"{category} column not found")
+
+    # ---------------- METADATA OVERVIEW ----------------
     st.subheader("📌 Country Metadata Overview")
 
-    meta_cols = [
-        "Latest agricultural census",
-        "Latest industrial data",
-        "Latest trade data",
-        "Latest water withdrawal data",
-        "Latest population census"
-    ]
+    meta_cols = list(category_map.values())
+    meta_cols = [c for c in meta_cols if c in data.columns]
 
-    # Keep only available columns
-    meta_cols = [col for col in meta_cols if col in data.columns]
+    clean_data = []
+    for col in meta_cols:
+        val = data[col].iloc[0]
 
-    if meta_cols:
-        meta_values = data[meta_cols].iloc[0].replace("..", None)
+        if val not in ["..", "", None]:
+            try:
+                clean_data.append((col, int(val)))
+            except:
+                pass
 
-        meta_df = pd.DataFrame({
-            "Category": meta_cols,
-            "Year": pd.to_numeric(meta_values.values, errors="coerce")
-        }).dropna()
-
-        if not meta_df.empty:
-            st.plotly_chart(
-                px.bar(meta_df, x="Category", y="Year",
-                       title="Latest Available Data (Year-wise)"),
-                use_container_width=True
-            )
-        else:
-            st.warning("Metadata exists but contains no usable values")
+    if clean_data:
+        meta_df = pd.DataFrame(clean_data, columns=["Category", "Year"])
+        st.plotly_chart(px.bar(meta_df, x="Category", y="Year"), use_container_width=True)
     else:
-        st.warning("Metadata columns not found in dataset")
+        st.warning("No metadata available")
 
-    # ---------------- LINE CHART ----------------
+    # ---------------- TIME SERIES ----------------
     st.subheader("📈 Year-wise Trend")
     trend = data.groupby("year")["value"].sum().reset_index()
     st.plotly_chart(px.line(trend, x="year", y="value"), use_container_width=True)
 
-    # ---------------- BAR CHART ----------------
+    # ---------------- DISTRIBUTION ----------------
     st.subheader("📊 Indicator Distribution")
     ind = data.groupby("indicator")["value"].sum().reset_index()
     st.plotly_chart(px.bar(ind, x="indicator", y="value"), use_container_width=True)
 
-    # ---------------- PIE CHART ----------------
     st.subheader("🥧 Indicator Share")
     st.plotly_chart(px.pie(ind, names="indicator", values="value"), use_container_width=True)
 
-    # ---------------- HISTOGRAM ----------------
-    st.subheader("📉 Value Distribution")
+    st.subheader("📉 Histogram")
     st.plotly_chart(px.histogram(data, x="value"), use_container_width=True)
 
-    # ---------------- BOX PLOT ----------------
-    st.subheader("📦 Value Spread")
+    st.subheader("📦 Box Plot")
     st.plotly_chart(px.box(data, y="value"), use_container_width=True)
 
-    # ---------------- SCATTER ----------------
-    st.subheader("🔵 Scatter Plot (Year vs Value)")
+    st.subheader("🔵 Scatter")
     data["size_value"] = data["value"].abs()
-    st.plotly_chart(
-        px.scatter(data, x="year", y="value", size="size_value"),
-        use_container_width=True
-    )
+    st.plotly_chart(px.scatter(data, x="year", y="value", size="size_value"), use_container_width=True)
 
-    # ---------------- HEATMAP ----------------
-    st.subheader("🔥 Heatmap (Year vs Indicator)")
-    pivot = data.pivot_table(values="value", index="year",
-                             columns="indicator", aggfunc="sum")
-
+    st.subheader("🔥 Heatmap")
+    pivot = data.pivot_table(values="value", index="year", columns="indicator", aggfunc="sum")
     if not pivot.empty:
-        st.plotly_chart(px.imshow(pivot, aspect="auto"),
-                        use_container_width=True)
-    else:
-        st.warning("No data available for heatmap")
+        st.plotly_chart(px.imshow(pivot, aspect="auto"), use_container_width=True)
