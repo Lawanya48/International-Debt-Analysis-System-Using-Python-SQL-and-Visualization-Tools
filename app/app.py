@@ -47,8 +47,8 @@ if page == "Dashboard":
 
 # ================= INSIGHTS =================
 elif page == "Insights":
-    insights.show_insights()
-
+    insights.show_insights(df)
+        
 # ================= QUERIES =================
 elif page == "Queries":
     queries.show_queries()
