@@ -8,32 +8,19 @@ def show_insights(df):
 
     df = df.copy()
 
-    # ---------------- DATA CLEANING ----------------
-    df["value"] = df.groupby(["country", "indicator"])["value"].ffill()
-    df["value"] = df.groupby(["country", "indicator"])["value"].bfill()
-    df = df.dropna(subset=["value"])
+    # ---------------- LOAD METADATA ----------------
+    try:
+        meta = pd.read_csv("data/IDS_CountryMetaData.csv")
+    except:
+        st.error("Metadata file not found")
+        return
+
+    # Merge metadata with main data
+    df = df.merge(meta, left_on="country", right_on="Country Name", how="left")
 
     # ---------------- FILTERS ----------------
     st.sidebar.header("🔍 Insights Filters")
 
-    category = st.sidebar.selectbox(
-        "Category",
-        ["All", "Population", "Trade", "Agriculture", "Industry"]
-    )
-
-    # 🔥 FIXED CATEGORY MAPPING
-    category_map = {
-        "Population": ["population"],
-        "Trade": ["export", "import", "trade"],
-        "Agriculture": ["agriculture"],
-        "Industry": ["industry"]
-    }
-
-    if category != "All":
-        keywords = category_map.get(category, [])
-        df = df[df["indicator"].str.lower().str.contains('|'.join(keywords), na=False)]
-
-    # Country filter
     country = st.sidebar.selectbox(
         "Country",
         sorted(df["country"].dropna().unique())
@@ -41,15 +28,34 @@ def show_insights(df):
 
     data = df[df["country"] == country]
 
-    # Safety check
     if data.empty:
-        st.warning(f"No data available for {category} in {country}")
+        st.warning("No data available")
         return
 
-    st.subheader(f"{country} - {category} Analysis")
+    st.subheader(f"{country} Analysis")
 
     # ---------------- KPI ----------------
     st.metric("💰 Total Value", f"{data['value'].sum():,.2f}")
+
+    # ---------------- METADATA VISUALIZATION ----------------
+    st.subheader("📌 Country Metadata Overview")
+
+    meta_cols = [
+        "Latest agricultural census",
+        "Latest industrial data",
+        "Latest trade data",
+        "Latest water withdrawal data",
+        "Latest population census"
+    ]
+
+    # Count availability (non-null)
+    meta_data = data[meta_cols].notna().sum().reset_index()
+    meta_data.columns = ["Category", "Available Count"]
+
+    st.plotly_chart(
+        px.bar(meta_data, x="Category", y="Available Count", title="Metadata Availability"),
+        use_container_width=True
+    )
 
     # ---------------- LINE CHART ----------------
     st.subheader("📈 Year-wise Trend")
@@ -61,7 +67,7 @@ def show_insights(df):
     ind = data.groupby("indicator")["value"].sum().reset_index()
     st.plotly_chart(px.bar(ind, x="indicator", y="value"), use_container_width=True)
 
-    # ---------------- PIE CHART ----------------
+    # ---------------- PIE ----------------
     st.subheader("🥧 Indicator Share")
     st.plotly_chart(px.pie(ind, names="indicator", values="value"), use_container_width=True)
 
@@ -69,12 +75,12 @@ def show_insights(df):
     st.subheader("📉 Value Distribution")
     st.plotly_chart(px.histogram(data, x="value"), use_container_width=True)
 
-    # ---------------- BOX PLOT ----------------
+    # ---------------- BOX ----------------
     st.subheader("📦 Value Spread")
     st.plotly_chart(px.box(data, y="value"), use_container_width=True)
 
     # ---------------- SCATTER ----------------
-    st.subheader("🔵 Scatter Plot (Year vs Value)")
+    st.subheader("🔵 Scatter Plot")
     data["size_value"] = data["value"].abs()
     st.plotly_chart(
         px.scatter(data, x="year", y="value", size="size_value"),
@@ -82,6 +88,6 @@ def show_insights(df):
     )
 
     # ---------------- HEATMAP ----------------
-    st.subheader("🔥 Heatmap (Year vs Indicator)")
+    st.subheader("🔥 Heatmap")
     pivot = data.pivot_table(values="value", index="year", columns="indicator", aggfunc="sum")
     st.plotly_chart(px.imshow(pivot, aspect="auto"), use_container_width=True)
