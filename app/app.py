@@ -1,6 +1,11 @@
 import streamlit as st
 import pandas as pd
 import os
+import sys
+
+# ✅ FIX PATH
+sys.path.append(os.path.dirname(__file__))
+
 import insights
 import queries
 
@@ -15,7 +20,6 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Insights", "Queries"])
 
 # Dashboard
 if page == "Dashboard":
-
     st.title("🌍 Global Dashboard")
 
     country = st.selectbox("Country", df["country"].unique())
