@@ -1,8 +1,16 @@
 import streamlit as st
 import pandas as pd
-import sys, os
+import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import os
+import pandas as pd
+
+base_path = os.path.dirname(__file__)
+file_path = os.path.join(base_path, "final_dataset.csv")
+
+#df = pd.read_csv(file_path)
+
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.insights import show_insights
 from src.queries import show_queries
