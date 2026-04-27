@@ -6,13 +6,11 @@ def show_insights(df):
 
     st.title("📊 Insights Dashboard")
 
-    # ---------------- DATA CLEANING ----------------
     df = df.copy()
 
-    # Fill missing values
+    # ---------------- DATA CLEANING ----------------
     df["value"] = df.groupby(["country", "indicator"])["value"].ffill()
     df["value"] = df.groupby(["country", "indicator"])["value"].bfill()
-
     df = df.dropna(subset=["value"])
 
     # ---------------- FILTERS ----------------
@@ -20,12 +18,22 @@ def show_insights(df):
 
     category = st.sidebar.selectbox(
         "Category",
-        ["All", "Debt"]
+        ["All", "Population", "Trade", "Agriculture", "Industry"]
     )
 
-    if category != "All":
-        df = df[df["indicator"].str.contains(category, case=False, na=False)]
+    # 🔥 FIXED CATEGORY MAPPING
+    category_map = {
+        "Population": ["population"],
+        "Trade": ["export", "import", "trade"],
+        "Agriculture": ["agriculture"],
+        "Industry": ["industry"]
+    }
 
+    if category != "All":
+        keywords = category_map.get(category, [])
+        df = df[df["indicator"].str.lower().str.contains('|'.join(keywords), na=False)]
+
+    # Country filter
     country = st.sidebar.selectbox(
         "Country",
         sorted(df["country"].dropna().unique())
@@ -33,8 +41,9 @@ def show_insights(df):
 
     data = df[df["country"] == country]
 
+    # Safety check
     if data.empty:
-        st.warning("No data available for selected filters")
+        st.warning(f"No data available for {category} in {country}")
         return
 
     st.subheader(f"{country} - {category} Analysis")
@@ -64,9 +73,9 @@ def show_insights(df):
     st.subheader("📦 Value Spread")
     st.plotly_chart(px.box(data, y="value"), use_container_width=True)
 
-    # ---------------- SCATTER (FIXED) ----------------
+    # ---------------- SCATTER ----------------
     st.subheader("🔵 Scatter Plot (Year vs Value)")
-    data["size_value"] = data["value"].abs()   # fix negative values
+    data["size_value"] = data["value"].abs()
     st.plotly_chart(
         px.scatter(data, x="year", y="value", size="size_value"),
         use_container_width=True
