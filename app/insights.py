@@ -9,7 +9,7 @@ def show_insights(df):
 
     df = df.copy()
 
-    # ---------------- LOAD METADATA (FIXED PATH) ----------------
+    # ---------------- LOAD METADATA (FIXED PATH + ENCODING) ----------------
     base_path = os.path.dirname(__file__)
     meta_path = os.path.join(base_path, "..", "data", "IDS_CountryMetaData.csv")
 
@@ -17,7 +17,11 @@ def show_insights(df):
         st.error("❌ Metadata file not found. Please check data folder.")
         st.stop()
 
-    meta = pd.read_csv(meta_path)
+    # 🔥 FIXED ENCODING ISSUE
+    try:
+        meta = pd.read_csv(meta_path, encoding="utf-8")
+    except:
+        meta = pd.read_csv(meta_path, encoding="latin1")
 
     # ---------------- MERGE DATA ----------------
     df = df.merge(meta, left_on="country", right_on="Country Name", how="left")
@@ -27,7 +31,7 @@ def show_insights(df):
     df["value"] = df.groupby(["country", "indicator"])["value"].bfill()
     df = df.dropna(subset=["value"])
 
-    # ---------------- FILTERS ----------------
+    # ---------------- FILTER ----------------
     st.sidebar.header("🔍 Insights Filters")
 
     country = st.sidebar.selectbox(
@@ -57,7 +61,7 @@ def show_insights(df):
         "Latest population census"
     ]
 
-    # Convert metadata values into numeric (year)
+    # Extract first row (same for country)
     meta_values = data[meta_cols].iloc[0].replace("..", None)
 
     meta_df = pd.DataFrame({
@@ -67,10 +71,14 @@ def show_insights(df):
 
     meta_df = meta_df.dropna()
 
-    st.plotly_chart(
-        px.bar(meta_df, x="Category", y="Year", title="Latest Available Data (Year-wise)"),
-        use_container_width=True
-    )
+    if not meta_df.empty:
+        st.plotly_chart(
+            px.bar(meta_df, x="Category", y="Year",
+                   title="Latest Available Data (Year-wise)"),
+            use_container_width=True
+        )
+    else:
+        st.warning("No metadata available for this country")
 
     # ---------------- LINE CHART ----------------
     st.subheader("📈 Year-wise Trend")
@@ -104,5 +112,11 @@ def show_insights(df):
 
     # ---------------- HEATMAP ----------------
     st.subheader("🔥 Heatmap (Year vs Indicator)")
-    pivot = data.pivot_table(values="value", index="year", columns="indicator", aggfunc="sum")
-    st.plotly_chart(px.imshow(pivot, aspect="auto"), use_container_width=True)
+    pivot = data.pivot_table(values="value", index="year",
+                             columns="indicator", aggfunc="sum")
+
+    if not pivot.empty:
+        st.plotly_chart(px.imshow(pivot, aspect="auto"),
+                        use_container_width=True)
+    else:
+        st.warning("No data available for heatmap")
