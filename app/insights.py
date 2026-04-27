@@ -16,6 +16,7 @@ def show_insights(df):
     # ---------------- FILTER ----------------
     st.sidebar.header("🔍 Insights Filters")
 
+    # Country filter
     country = st.sidebar.selectbox(
         "Country",
         sorted(df["country"].dropna().unique())
@@ -27,7 +28,28 @@ def show_insights(df):
         st.warning("No data available")
         return
 
-    st.subheader(f"{country} Analysis")
+    # 🔥 YEAR RANGE FILTER (NEW)
+    min_year = int(data["year"].min())
+    max_year = int(data["year"].max())
+
+    year_range = st.sidebar.slider(
+        "Select Year Range",
+        min_year,
+        max_year,
+        (min_year, max_year)
+    )
+
+    # Apply year filter
+    data = data[
+        (data["year"] >= year_range[0]) &
+        (data["year"] <= year_range[1])
+    ]
+
+    if data.empty:
+        st.warning("No data available for selected year range")
+        return
+
+    st.subheader(f"{country} Analysis ({year_range[0]} - {year_range[1]})")
 
     # ---------------- KPI ----------------
     st.metric("💰 Total Value", f"{data['value'].sum():,.2f}")
