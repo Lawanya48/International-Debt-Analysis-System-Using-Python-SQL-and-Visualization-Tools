@@ -51,4 +51,4 @@ elif page == "Insights":
         
 # ================= QUERIES =================
 elif page == "Queries":
-    queries.show_queries()
+    queries.show_queries(df)
