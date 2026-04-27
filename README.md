@@ -180,15 +180,6 @@ international-debt-analysis-system/
 
 ---
 
-## 🧠 Viva Ready Points
-
-* Explained removal of null-heavy year columns
-* Justified use of multiple visualizations
-* Demonstrated data cleaning and transformation
-* Showcased interactive dashboard design
-
----
-
 ## 📌 Conclusion
 
 This project demonstrates a complete data analytics workflow, from data preprocessing to visualization, highlighting the importance of structured analysis in global financial datasets.
