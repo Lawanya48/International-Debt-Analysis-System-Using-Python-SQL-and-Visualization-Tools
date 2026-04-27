@@ -9,7 +9,7 @@ def show_insights(df):
 
     df = df.copy()
 
-    # ---------------- LOAD METADATA (FIXED PATH + ENCODING) ----------------
+    # ---------------- LOAD METADATA ----------------
     base_path = os.path.dirname(__file__)
     meta_path = os.path.join(base_path, "..", "data", "IDS_CountryMetaData.csv")
 
@@ -17,14 +17,28 @@ def show_insights(df):
         st.error("❌ Metadata file not found. Please check data folder.")
         st.stop()
 
-    # 🔥 FIXED ENCODING ISSUE
+    # Fix encoding issue
     try:
         meta = pd.read_csv(meta_path, encoding="utf-8")
     except:
         meta = pd.read_csv(meta_path, encoding="latin1")
 
-    # ---------------- MERGE DATA ----------------
-    df = df.merge(meta, left_on="country", right_on="Country Name", how="left")
+    # ---------------- FIND CORRECT COUNTRY COLUMN ----------------
+    possible_cols = ["Country Name", "country", "Country", "Long Name"]
+
+    meta_col = None
+    for col in possible_cols:
+        if col in meta.columns:
+            meta_col = col
+            break
+
+    if meta_col is None:
+        st.error("❌ No matching country column found in metadata")
+        st.write("Available columns:", list(meta.columns))
+        st.stop()
+
+    # ---------------- MERGE ----------------
+    df = df.merge(meta, left_on="country", right_on=meta_col, how="left")
 
     # ---------------- DATA CLEANING ----------------
     df["value"] = df.groupby(["country", "indicator"])["value"].ffill()
@@ -61,24 +75,27 @@ def show_insights(df):
         "Latest population census"
     ]
 
-    # Extract first row (same for country)
-    meta_values = data[meta_cols].iloc[0].replace("..", None)
+    # Keep only available columns
+    meta_cols = [col for col in meta_cols if col in data.columns]
 
-    meta_df = pd.DataFrame({
-        "Category": meta_cols,
-        "Year": meta_values.values
-    })
+    if meta_cols:
+        meta_values = data[meta_cols].iloc[0].replace("..", None)
 
-    meta_df = meta_df.dropna()
+        meta_df = pd.DataFrame({
+            "Category": meta_cols,
+            "Year": pd.to_numeric(meta_values.values, errors="coerce")
+        }).dropna()
 
-    if not meta_df.empty:
-        st.plotly_chart(
-            px.bar(meta_df, x="Category", y="Year",
-                   title="Latest Available Data (Year-wise)"),
-            use_container_width=True
-        )
+        if not meta_df.empty:
+            st.plotly_chart(
+                px.bar(meta_df, x="Category", y="Year",
+                       title="Latest Available Data (Year-wise)"),
+                use_container_width=True
+            )
+        else:
+            st.warning("Metadata exists but contains no usable values")
     else:
-        st.warning("No metadata available for this country")
+        st.warning("Metadata columns not found in dataset")
 
     # ---------------- LINE CHART ----------------
     st.subheader("📈 Year-wise Trend")
