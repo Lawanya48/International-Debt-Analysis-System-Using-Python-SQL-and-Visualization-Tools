@@ -20,7 +20,7 @@ def show_insights(df):
 
     category = st.sidebar.selectbox(
         "Category",
-        ["All", "Debt", "Population", "Trade", "Agriculture", "Industry"]
+        ["All", "Debt"]
     )
 
     if category != "All":
